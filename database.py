@@ -8,3 +8,5 @@ sqlalchemy_database_url = 'postgresql://myuser:mypassword@db:5432/TodoAppDatabas
 engine = create_engine(sqlalchemy_database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# branch to commit
