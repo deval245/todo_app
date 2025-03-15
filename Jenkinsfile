@@ -2,21 +2,22 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'deval245/todo-app'  // ✅ Your DockerHub repo name (replace 'todo-app' with actual repo name on DockerHub if different)
+        IMAGE_NAME = 'deval245/todo-app'  // ✅ Your DockerHub repo name
         IMAGE_TAG = 'latest'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                git 'https://github.com/deval245/todo_app.git'  // ✅ Your actual GitHub repo
+                git branch: 'main', url: 'https://github.com/deval245/todo_app.git'  // ✅ Always mention branch
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
+                    // ✅ Explicit Dockerfile usage for App (not Jenkins)
+                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}", "-f Dockerfile .")
                 }
             }
         }
@@ -24,8 +25,8 @@ pipeline {
         stage('Push Docker Image to DockerHub') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-cred') { // ✅ Your Jenkins DockerHub credentials ID (you'll create this in Jenkins Credentials)
-                        docker.image("${IMAGE_NAME}:${IMAGE_TAG}").push()
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-cred') {  // ✅ Correct credentials ID
+                        docker.image("${IMAGE_NAME}:${IMAGE_TAG}").push()  // ✅ Push with tag
                     }
                 }
             }
@@ -34,8 +35,10 @@ pipeline {
         stage('Deploy Application using Docker Compose') {
             steps {
                 script {
-                    sh 'docker-compose down'  // ✅ Stop existing containers
-                    sh 'docker-compose up --build -d'  // ✅ Rebuild and restart containers
+                    // ✅ Stop existing containers
+                    sh 'docker-compose down'
+                    // ✅ Rebuild and deploy latest
+                    sh 'docker-compose up --build -d'
                 }
             }
         }
@@ -43,10 +46,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment Successful!"
+            echo "✅ Deployment Successful! Latest image pushed and deployed."
         }
         failure {
-            echo "❌ Pipeline Failed. Please check logs!"
+            echo "❌ Pipeline Failed. Please check Jenkins logs for errors."
         }
     }
 }
