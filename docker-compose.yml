@@ -15,9 +15,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile  # Your app Dockerfile (for FastAPI app)
+    build: .
     container_name: fastapi_todo
     restart: always
     depends_on:
@@ -45,22 +43,20 @@ services:
       - pgadmin_data:/var/lib/pgadmin
 
   jenkins:
-    build:
-      context: .
-      dockerfile: Dockerfile.jenkins.Dockerfile  # ✅ Custom Jenkins Dockerfile
+    image: jenkins/jenkins:lts-docker  # ✅ Updated image with Docker pre-installed
     container_name: todo_jenkins
     restart: always
     ports:
-      - "8181:8080"  # Jenkins UI
-      - "50000:50000"  # Agents
-    privileged: true
+      - "8181:8080"  # Jenkins UI accessible at localhost:8181
+      - "50000:50000"  # For Jenkins agents
+    privileged: true  # ✅ Needed to access Docker socket inside Jenkins container
     user: root
     volumes:
-      - jenkins_home:/var/jenkins_home  # Jenkins data
-      - ./jenkins_plugins:/usr/share/jenkins/ref/plugins  # Jenkins plugins
-      - /var/run/docker.sock:/var/run/docker.sock  # Access Docker daemon
+      - jenkins_home:/var/jenkins_home  # Jenkins home directory for persistence
+      - ./jenkins_plugins:/usr/share/jenkins/ref/plugins  # Plugins directory
+      - /var/run/docker.sock:/var/run/docker.sock  # ✅ Access to host Docker
     environment:
-      JAVA_OPTS: -Djenkins.install.runSetupWizard=false
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false  # Skip setup wizard
 
 volumes:
   postgres_data:
