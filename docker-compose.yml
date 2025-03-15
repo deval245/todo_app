@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: mypassword
       POSTGRES_DB: todo_db
     ports:
-      - "5433:5432"
+      - "5433:5432"  # Host:Container
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -42,6 +42,23 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
 
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: todo_jenkins
+    restart: always
+    ports:
+      - "8181:8080"  # Jenkins UI accessible at localhost:8181
+      - "50000:50000"  # For Jenkins agents
+    privileged: true  # To allow Docker inside Jenkins
+    user: root
+    volumes:
+      - jenkins_home:/var/jenkins_home  # Persistent Jenkins data
+      - ./jenkins_plugins:/usr/share/jenkins/ref/plugins  # Pre-load Jenkins plugins on first start
+      - /var/run/docker.sock:/var/run/docker.sock  # Access to Docker daemon for Jenkins
+    environment:
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false  # Optional: Skip setup wizard
+
 volumes:
   postgres_data:
   pgadmin_data:
+  jenkins_home:
