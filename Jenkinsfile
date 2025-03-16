@@ -5,8 +5,7 @@ pipeline {
         GITHUB_CREDENTIALS = credentials('github-cred')
         IMAGE_NAME = "devalth/todo-app"
         BRANCH_NAME = "${env.BRANCH_NAME}"
-        APP_CONTAINER = "fastapi_todo_${env.BRANCH_NAME}"
-        DOCKER_COMPOSE_FILE = "docker-compose.${env.BRANCH_NAME}.yaml"
+        K8S_NAMESPACE = "todo-app-${env.BRANCH_NAME}"  // Separate namespace per branch (qa, main, develop)
     }
 
     stages {
@@ -34,49 +33,55 @@ pipeline {
             }
         }
 
-        // ✅ Stage 3: Ensure Network Exists
-        stage('Ensure Network Exists') {
-            steps {
-                echo "🌐 Ensuring network 'todo_network' exists..."
-                sh "docker network inspect todo_network >/dev/null 2>&1 || docker network create todo_network"
-            }
-        }
-
-        // ✅ Stage 4: Stop & Remove Previous Container (if running)
-        stage('Stop & Remove Old Container') {
+        // ✅ Stage 3: Create Namespace if Not Exists
+        stage('Create Namespace') {
             steps {
                 script {
-                    echo "🧹 Stopping & removing old container if exists: ${APP_CONTAINER}"
+                    echo "📦 Ensuring Kubernetes namespace '${K8S_NAMESPACE}' exists..."
                     sh """
-                        docker ps -a --format '{{.Names}}' | grep -w ${APP_CONTAINER} && docker rm -f ${APP_CONTAINER} || echo 'ℹ️ No existing container to remove.'
+                        kubectl get namespace ${K8S_NAMESPACE} || kubectl create namespace ${K8S_NAMESPACE}
                     """
                 }
             }
         }
 
-        // ✅ Stage 5: Deploy App Container (Pull & Up)
-        stage('Deploy App Container') {
+        // ✅ Stage 4: Deploy to Kubernetes (Apply Manifests)
+        stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    echo "🚀 Deploying app container for branch: ${BRANCH_NAME} using ${DOCKER_COMPOSE_FILE}"
+                    echo "🚀 Deploying app to Kubernetes in namespace '${K8S_NAMESPACE}'..."
+
+                    // Inject branch name & image dynamically into k8s files before apply
                     sh """
-                        docker-compose -f ${DOCKER_COMPOSE_FILE} pull
-                        docker-compose -f ${DOCKER_COMPOSE_FILE} down --remove-orphans
-                        docker-compose -f ${DOCKER_COMPOSE_FILE} up --build --force-recreate -d
+                        # Replace placeholder IMAGE TAG in deployment.yaml dynamically
+                        sed 's|IMAGE_PLACEHOLDER|${IMAGE_NAME}:${BRANCH_NAME}|g' k8s/deployment.yaml > k8s/deployment_temp.yaml
+
+                        # Apply Namespace (idempotent)
+                        kubectl apply -f k8s/namespace.yaml
+
+                        # Apply Deployment and Service
+                        kubectl apply -f k8s/deployment_temp.yaml -n ${K8S_NAMESPACE}
+                        kubectl apply -f k8s/service.yaml -n ${K8S_NAMESPACE}
                     """
                 }
             }
         }
 
-        // ✅ Stage 6: Health Check to ensure container is up
+        // ✅ Stage 5: Health Check for K8s Pod
         stage('Health Check') {
             steps {
                 script {
-                    echo '🔍 Performing health check for app container...'
+                    echo '🔍 Performing health check for Kubernetes deployment...'
                     sh """
-                        sleep 10  # Wait for the container to be ready
-                        docker ps | grep ${APP_CONTAINER} || (echo '❌ App container is not running!' && exit 1)
-                        echo '✅ App container is running successfully.'
+                        sleep 10  # Wait for pods to spin up
+                        kubectl get pods -n ${K8S_NAMESPACE}
+                        POD_NAME=\$(kubectl get pods -n ${K8S_NAMESPACE} -l app=todo-app -o jsonpath="{.items[0].metadata.name}")
+                        kubectl logs \$POD_NAME -n ${K8S_NAMESPACE}
+                        kubectl get svc -n ${K8S_NAMESPACE}
+
+                        # Check if Pod is Running
+                        kubectl wait --for=condition=ready pod/\$POD_NAME --timeout=60s -n ${K8S_NAMESPACE}
+                        echo '✅ App deployed and running successfully on Kubernetes.'
                     """
                 }
             }
@@ -86,10 +91,10 @@ pipeline {
     // ✅ Post actions for status
     post {
         success {
-            echo "🎉 Deployment successful on branch: ${BRANCH_NAME}!"
+            echo "🎉 Kubernetes deployment successful on branch: ${BRANCH_NAME}!"
         }
         failure {
-            echo "❌ Deployment failed on branch: ${BRANCH_NAME}. Check Jenkins logs for more details."
+            echo "❌ Kubernetes deployment failed on branch: ${BRANCH_NAME}. Check Jenkins logs for more details."
         }
         always {
             echo "📜 Pipeline completed for branch: ${BRANCH_NAME}."

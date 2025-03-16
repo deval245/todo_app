@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-app-service
+spec:
+  type: NodePort  # Change LoadBalancer to NodePort
+  selector:
+    app: todo-app
+  ports:
+  - protocol: TCP
+    port: 80          # Externally accessible port
+    targetPort: 8000  # Port your app is listening inside pod
+    nodePort: 30007   # Optional: Custom static port, or remove to auto-assign
