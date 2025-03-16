@@ -23,7 +23,7 @@ services:
     environment:
       DATABASE_URL: postgresql://myuser:mypassword@db:5432/todo_db
     ports:
-      - "8000:8000"  # FastAPI running on 8000
+      - "8000:8000"
     volumes:
       - .:/app  # Bind source code for development
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]  # Auto-reload for dev
