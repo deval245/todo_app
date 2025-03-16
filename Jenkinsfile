@@ -2,21 +2,28 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'devalth/todo-app'
-        IMAGE_TAG = 'latest'
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-cred')  // DockerHub credential ID
+        GITHUB_CREDENTIALS = credentials('github-cred')        // GitHub credential ID
+        IMAGE_NAME = "devalth/todo-app"
+        APP_CONTAINER = "fastapi_todo"
+        PGADMIN_CONTAINER = "todo_pgadmin"
+        DB_CONTAINER = "todo_postgres"
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
-                git credentialsId: 'github-cred', url: 'https://github.com/deval245/todo_app.git'
+                echo '🧾 Checking out code from GitHub...'
+                git branch: 'main', credentialsId: "${env.GITHUB_CREDENTIALS}", url: 'https://github.com/deval245/todo_app.git'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
+                    echo '🐳 Building the Docker image...'
+                    sh "docker build -t ${IMAGE_NAME}:latest ."
                 }
             }
         }
@@ -24,25 +31,75 @@ pipeline {
         stage('Push Docker Image to DockerHub') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'docker-cred') {
-                        docker.image("${IMAGE_NAME}:${IMAGE_TAG}").push()
-                    }
+                    echo '🔐 Logging into DockerHub and pushing image...'
+                    sh """
+                    echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
+                    docker tag ${IMAGE_NAME}:latest index.docker.io/${IMAGE_NAME}:latest
+                    docker push index.docker.io/${IMAGE_NAME}:latest
+                    docker logout
+                    """
                 }
             }
         }
 
-        stage('Clean and Deploy Containers (Without Dropping DB)') {
+        stage('Clean and Prepare Containers (Safe for DB)') {
             steps {
                 script {
-                    sh '''
-                        echo "⚙️ Stopping running app and pgAdmin containers if they exist..."
-                        docker rm -f fastapi_todo || true
-                        docker rm -f todo_pgadmin || true
-                        echo "✅ Cleaned up old app and pgAdmin containers."
+                    echo '⚙️ Stopping and removing old containers except for DB...'
+                    sh """
+                    # Handle App container
+                    if [ \$(docker ps -q -f name=${APP_CONTAINER}) ]; then
+                        echo '🛑 Stopping App container...'
+                        docker stop ${APP_CONTAINER}
+                        docker rm ${APP_CONTAINER}
+                    fi
 
-                        echo "🚀 Bringing up app and pgAdmin fresh, preserving DB..."
-                        docker-compose up --build -d app pgadmin
-                    '''
+                    # Handle PGAdmin container
+                    if [ \$(docker ps -q -f name=${PGADMIN_CONTAINER}) ]; then
+                        echo '🛑 Stopping PGAdmin container...'
+                        docker stop ${PGADMIN_CONTAINER}
+                        docker rm ${PGADMIN_CONTAINER}
+                    fi
+
+                    # Handle DB container (Don't touch for safety)
+                    if [ \$(docker ps -q -f name=${DB_CONTAINER}) ]; then
+                        echo '✅ DB is running safely and will be reused!'
+                    else
+                        echo '⚠️ WARNING: DB is NOT running. Please check manually!'
+                    fi
+                    """
+                }
+            }
+        }
+
+        stage('Deploy Fresh App and PGAdmin (Preserve DB)') {
+            steps {
+                script {
+                    echo '🚀 Bringing up App and PGAdmin, DB preserved!'
+                    sh """
+                    docker-compose up --build -d app pgadmin
+                    """
+                }
+            }
+        }
+
+        stage('Post-Deployment Health Check') {
+            steps {
+                script {
+                    echo '🔍 Running Health Checks for App and PGAdmin...'
+                    sh """
+                    if [ ! \$(docker ps -q -f name=${APP_CONTAINER}) ]; then
+                        echo '❌ ERROR: App container failed to start.'
+                        exit 1
+                    fi
+
+                    if [ ! \$(docker ps -q -f name=${PGADMIN_CONTAINER}) ]; then
+                        echo '❌ ERROR: PGAdmin container failed to start.'
+                        exit 1
+                    fi
+
+                    echo '✅ Both App and PGAdmin are up and running successfully.'
+                    """
                 }
             }
         }
@@ -50,10 +107,14 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment Successful!"
+            echo '🎉 Deployment successful and running smoothly!'
         }
         failure {
-            echo "❌ Pipeline Failed. Please check Jenkins logs for errors."
+            echo '❌ Deployment failed! Check the above logs to debug.'
+            // 🔔 Optional: Add Slack/Email notification for failures here
+        }
+        always {
+            echo '📜 Pipeline finished (check status above).'
         }
     }
 }
