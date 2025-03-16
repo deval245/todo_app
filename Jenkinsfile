@@ -34,12 +34,14 @@ pipeline {
         stage('Deploy Application using Docker Compose') {
             steps {
                 script {
-                    // ✅ First forcefully remove any existing conflicting containers
+                    // ✅ First forcefully remove any conflicting containers dynamically
                     sh '''
-                        if [ $(docker ps -a -q -f name=todo_postgres) ]; then
-                            echo "⚙️ Removing old todo_postgres container..."
-                            docker rm -f todo_postgres
-                        fi
+                        for container in todo_postgres todo_pgadmin fastapi_todo; do
+                            if [ $(docker ps -a -q -f name=$container) ]; then
+                                echo "⚙️ Removing old container: $container ..."
+                                docker rm -f $container
+                            fi
+                        done
                     '''
 
                     // ✅ Bring down existing setup if any (volumes + orphans)
