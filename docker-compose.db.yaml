@@ -1,4 +1,4 @@
-# docker-compose.db.yaml (executed only once manually and left running)
+# docker-compose.db.yaml (executed only once manually and left runn)
 version: "3.8"
 services:
   db:
