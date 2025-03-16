@@ -10,7 +10,7 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git credentialsId: 'aa1e19cf-82e1-4a8a-9200-d15c06f4c0dd', url: 'https://github.com/deval245/todo_app.git'
+                git credentialsId: 'github-cred', url: 'https://github.com/deval245/todo_app.git'
             }
         }
 
@@ -25,7 +25,7 @@ pipeline {
         stage('Push Docker Image to DockerHub') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'e4c0f518-e388-4d8b-9402-c1fe4d33cc44') {
+                    docker.withRegistry('https://index.docker.io/v1/', 'docker-cred') {
                         docker.image("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
                 }
