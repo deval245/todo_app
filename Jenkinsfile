@@ -3,102 +3,69 @@ pipeline {
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('docker-cred')
-        GITHUB_CREDENTIALS = credentials('github-cred')        // GitHub credential ID
+        GITHUB_CREDENTIALS = credentials('github-cred')
         IMAGE_NAME = "devalth/todo-app"
         APP_CONTAINER = "fastapi_todo"
         PGADMIN_CONTAINER = "todo_pgadmin"
         DB_CONTAINER = "todo_postgres"
+        BRANCH_NAME = "${env.BRANCH_NAME}"  // Capture branch dynamically
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                echo '🧾 Checking out code from GitHub...'
-                git branch: 'main', credentialsId: "${env.GITHUB_CREDENTIALS}", url: 'https://github.com/deval245/todo_app.git'
+                echo "🧾 Checking out branch: ${env.BRANCH_NAME}"
+                git branch: "${env.BRANCH_NAME}", credentialsId: "${env.GITHUB_CREDENTIALS}", url: 'https://github.com/deval245/todo_app.git'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build & Push Docker Image') {
             steps {
                 script {
-                    echo '🐳 Building the Docker image...'
-                    sh "docker build -t ${IMAGE_NAME}:latest ."
-                }
-            }
-        }
-
-        stage('Push Docker Image to DockerHub') {
-            steps {
-                script {
-                    echo '🔐 Logging into DockerHub and pushing image...'
+                    echo '🐳 Building & pushing image to DockerHub...'
                     sh """
-                    echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
-                    docker tag ${IMAGE_NAME}:latest index.docker.io/${IMAGE_NAME}:latest
-                    docker push index.docker.io/${IMAGE_NAME}:latest
-                    docker logout
+                        docker build -t ${IMAGE_NAME}:${BRANCH_NAME} .
+                        echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
+                        docker push ${IMAGE_NAME}:${BRANCH_NAME}
+                        docker logout
                     """
                 }
             }
         }
 
-        stage('Clean and Prepare Containers (Safe for DB)') {
+        stage('Safe Cleanup Old Containers') {
             steps {
                 script {
-                    echo '⚙️ Stopping and removing old containers except for DB...'
+                    echo '⚙️ Cleaning up old containers (except DB)...'
                     sh """
-                    # Handle App container
-                    if [ \$(docker ps -q -f name=${APP_CONTAINER}) ]; then
-                        echo '🛑 Stopping App container...'
-                        docker stop ${APP_CONTAINER}
-                        docker rm ${APP_CONTAINER}
-                    fi
-
-                    # Handle PGAdmin container
-                    if [ \$(docker ps -q -f name=${PGADMIN_CONTAINER}) ]; then
-                        echo '🛑 Stopping PGAdmin container...'
-                        docker stop ${PGADMIN_CONTAINER}
-                        docker rm ${PGADMIN_CONTAINER}
-                    fi
-
-                    # Handle DB container (Don't touch for safety)
-                    if [ \$(docker ps -q -f name=${DB_CONTAINER}) ]; then
-                        echo '✅ DB is running safely and will be reused!'
-                    else
-                        echo '⚠️ WARNING: DB is NOT running. Please check manually!'
-                    fi
+                        docker stop ${APP_CONTAINER} || true && docker rm ${APP_CONTAINER} || true
+                        docker stop ${PGADMIN_CONTAINER} || true && docker rm ${PGADMIN_CONTAINER} || true
                     """
                 }
             }
         }
 
-        stage('Deploy Fresh App and PGAdmin (Preserve DB)') {
+        stage('Deploy Environment') {
             steps {
                 script {
-                    echo '🚀 Bringing up App and PGAdmin, DB preserved!'
+                    echo "🚀 Deploying using docker-compose.${BRANCH_NAME}.yaml"
                     sh """
-                    docker-compose up --build -d app pgadmin
+                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml pull  # Optional if pulling
+                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml up --build -d app pgadmin
                     """
                 }
             }
         }
 
-        stage('Post-Deployment Health Check') {
+        stage('Health Check') {
             steps {
                 script {
-                    echo '🔍 Running Health Checks for App and PGAdmin...'
+                    echo '🔍 Checking running containers...'
                     sh """
-                    if [ ! \$(docker ps -q -f name=${APP_CONTAINER}) ]; then
-                        echo '❌ ERROR: App container failed to start.'
-                        exit 1
-                    fi
-
-                    if [ ! \$(docker ps -q -f name=${PGADMIN_CONTAINER}) ]; then
-                        echo '❌ ERROR: PGAdmin container failed to start.'
-                        exit 1
-                    fi
-
-                    echo '✅ Both App and PGAdmin are up and running successfully.'
+                        docker ps | grep ${APP_CONTAINER} || (echo '❌ App Failed!' && exit 1)
+                        docker ps | grep ${PGADMIN_CONTAINER} || (echo '❌ PGAdmin Failed!' && exit 1)
+                        echo '✅ All good in ${BRANCH_NAME} environment!'
                     """
                 }
             }
@@ -107,14 +74,13 @@ pipeline {
 
     post {
         success {
-            echo '🎉 Deployment successful and running smoothly!'
+            echo "🎉 Successful build & deployment on ${BRANCH_NAME}!"
         }
         failure {
-            echo '❌ Deployment failed! Check the above logs to debug.'
-            // 🔔 Optional: Add Slack/Email notification for failures here
+            echo "❌ Build or Deployment failed on ${BRANCH_NAME}!"
         }
         always {
-            echo '📜 Pipeline finished (check status above).'
+            echo "📜 Pipeline finished for ${BRANCH_NAME} (check status)."
         }
     }
 }
