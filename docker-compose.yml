@@ -43,7 +43,7 @@ services:
       - pgadmin_data:/var/lib/pgadmin  # Persistent pgAdmin settings
 
   jenkins:
-    image: jenkins/jenkins:lts-docker  # ✅ Jenkins image with Docker pre-installed
+    image: jenkins/jenkins:lts  # ✅ Jenkins image with Docker pre-installed
     container_name: todo_jenkins
     restart: always
     ports:
