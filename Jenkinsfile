@@ -44,10 +44,10 @@ pipeline {
                         done
                     '''
 
-                    // ✅ Bring down existing setup if any (volumes + orphans)
+                    // ✅ Bring down existing setup if any (with volumes and orphans cleanup)
                     sh 'docker-compose down --volumes --remove-orphans || true'
 
-                    // ✅ Rebuild and bring up new deployment
+                    // ✅ Rebuild and start everything freshly
                     sh 'docker-compose up --build -d'
                 }
             }
