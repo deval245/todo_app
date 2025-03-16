@@ -2,22 +2,21 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'deval245/todo-app'  // ✅ Your DockerHub repo name
+        IMAGE_NAME = 'deval245/todo-app'
         IMAGE_TAG = 'latest'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/deval245/todo_app.git'  // ✅ Always mention branch
+                git credentialsId: 'github-cred', url: 'https://github.com/deval245/todo_app.git'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    // ✅ Explicit Dockerfile usage for App (not Jenkins)
-                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}", "-f Dockerfile .")
+                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
                 }
             }
         }
@@ -25,8 +24,8 @@ pipeline {
         stage('Push Docker Image to DockerHub') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-cred') {  // ✅ Correct credentials ID
-                        docker.image("${IMAGE_NAME}:${IMAGE_TAG}").push()  // ✅ Push with tag
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-cred') {
+                        docker.image("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
                 }
             }
@@ -35,9 +34,7 @@ pipeline {
         stage('Deploy Application using Docker Compose') {
             steps {
                 script {
-                    // ✅ Stop existing containers
                     sh 'docker-compose down'
-                    // ✅ Rebuild and deploy latest
                     sh 'docker-compose up --build -d'
                 }
             }
@@ -46,7 +43,7 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment Successful! Latest image pushed and deployed."
+            echo "✅ Deployment Successful!"
         }
         failure {
             echo "❌ Pipeline Failed. Please check Jenkins logs for errors."

@@ -12,7 +12,7 @@ services:
     ports:
       - "5433:5432"  # Host:Container
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data  # Persistent database storage
 
   app:
     build: .
@@ -23,10 +23,10 @@ services:
     environment:
       DATABASE_URL: postgresql://myuser:mypassword@db:5432/todo_db
     ports:
-      - "8000:8000"
+      - "8000:8000"  # FastAPI running on 8000
     volumes:
-      - .:/app
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      - .:/app  # Bind source code for development
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]  # Auto-reload for dev
 
   pgadmin:
     image: dpage/pgadmin4
@@ -35,28 +35,28 @@ services:
     depends_on:
       - db
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_EMAIL: admin@example.com  # Admin login for pgAdmin
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
-      - "5050:80"
+      - "5050:80"  # pgAdmin available on localhost:5050
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
+      - pgadmin_data:/var/lib/pgadmin  # Persistent pgAdmin settings
 
   jenkins:
-    image: jenkins/jenkins:lts-docker  # ✅ Updated image with Docker pre-installed
+    image: jenkins/jenkins:lts-docker  # ✅ Jenkins image with Docker pre-installed
     container_name: todo_jenkins
     restart: always
     ports:
-      - "8181:8080"  # Jenkins UI accessible at localhost:8181
-      - "50000:50000"  # For Jenkins agents
-    privileged: true  # ✅ Needed to access Docker socket inside Jenkins container
-    user: root
+      - "8181:8080"  # Jenkins Web UI on localhost:8181
+      - "50000:50000"  # Jenkins agent port
+    privileged: true  # ✅ Required to access Docker daemon
+    user: root  # Run as root to use Docker socket
     volumes:
-      - jenkins_home:/var/jenkins_home  # Jenkins home directory for persistence
-      - ./jenkins_plugins:/usr/share/jenkins/ref/plugins  # Plugins directory
-      - /var/run/docker.sock:/var/run/docker.sock  # ✅ Access to host Docker
+      - jenkins_home:/var/jenkins_home  # Persistent Jenkins data
+      - ./jenkins_plugins:/usr/share/jenkins/ref/plugins  # Pre-load Jenkins plugins (Optional)
+      - /var/run/docker.sock:/var/run/docker.sock  # ✅ Critical for Docker commands in Jenkins pipelines
     environment:
-      JAVA_OPTS: -Djenkins.install.runSetupWizard=false  # Skip setup wizard
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false  # Skip initial setup wizard (Optional)
 
 volumes:
   postgres_data:
