@@ -34,8 +34,18 @@ pipeline {
         stage('Deploy Application using Docker Compose') {
             steps {
                 script {
-                    // ✅ Safe cleanup of old containers, volumes, and networks before deploying
+                    // ✅ First forcefully remove any existing conflicting containers
+                    sh '''
+                        if [ $(docker ps -a -q -f name=todo_postgres) ]; then
+                            echo "⚙️ Removing old todo_postgres container..."
+                            docker rm -f todo_postgres
+                        fi
+                    '''
+
+                    // ✅ Bring down existing setup if any (volumes + orphans)
                     sh 'docker-compose down --volumes --remove-orphans || true'
+
+                    // ✅ Rebuild and bring up new deployment
                     sh 'docker-compose up --build -d'
                 }
             }
