@@ -47,7 +47,7 @@ services:
     container_name: todo_jenkins
     restart: always
     ports:
-      - "8181:8080"  # Jenkins UI
+      - "8181:8080"
       - "50000:50000"  # Agent port
     privileged: true  # ✅ Access Docker daemon
     user: root  # Run as root for docker.sock access
