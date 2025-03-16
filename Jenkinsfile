@@ -6,15 +6,20 @@ pipeline {
         IMAGE_NAME = "devalth/todo-app"
         BRANCH_NAME = "${env.BRANCH_NAME}"
         APP_CONTAINER = "fastapi_todo_${env.BRANCH_NAME}"
+        DOCKER_COMPOSE_FILE = "docker-compose.${env.BRANCH_NAME}.yaml"
     }
+
     stages {
+
+        // ✅ Stage 1: Checkout Code
         stage('Checkout Code') {
             steps {
-                echo "🧾 Checking out branch: ${env.BRANCH_NAME}"
-                git branch: "${env.BRANCH_NAME}", credentialsId: "${env.GITHUB_CREDENTIALS}", url: 'https://github.com/deval245/todo_app.git'
+                echo "🧾 Checking out branch: ${BRANCH_NAME}"
+                git branch: "${BRANCH_NAME}", credentialsId: "${GITHUB_CREDENTIALS}", url: 'https://github.com/deval245/todo_app.git'
             }
         }
 
+        // ✅ Stage 2: Build & Push Docker Image
         stage('Build & Push Docker Image') {
             steps {
                 script {
@@ -29,6 +34,7 @@ pipeline {
             }
         }
 
+        // ✅ Stage 3: Ensure Network Exists
         stage('Ensure Network Exists') {
             steps {
                 echo "🌐 Ensuring network 'todo_network' exists..."
@@ -36,33 +42,57 @@ pipeline {
             }
         }
 
-        stage('Deploy App Container') {
+        // ✅ Stage 4: Stop & Remove Previous Container (if running)
+        stage('Stop & Remove Old Container') {
             steps {
                 script {
-                    echo "🚀 Deploying app container for branch: ${BRANCH_NAME}"
+                    echo "🧹 Stopping & removing old container if exists: ${APP_CONTAINER}"
                     sh """
-                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml pull
-                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml up --build --force-recreate -d
+                        docker ps -a --format '{{.Names}}' | grep -w ${APP_CONTAINER} && docker rm -f ${APP_CONTAINER} || echo 'ℹ️ No existing container to remove.'
                     """
                 }
             }
         }
 
+        // ✅ Stage 5: Deploy App Container (Pull & Up)
+        stage('Deploy App Container') {
+            steps {
+                script {
+                    echo "🚀 Deploying app container for branch: ${BRANCH_NAME} using ${DOCKER_COMPOSE_FILE}"
+                    sh """
+                        docker-compose -f ${DOCKER_COMPOSE_FILE} pull
+                        docker-compose -f ${DOCKER_COMPOSE_FILE} down --remove-orphans
+                        docker-compose -f ${DOCKER_COMPOSE_FILE} up --build --force-recreate -d
+                    """
+                }
+            }
+        }
+
+        // ✅ Stage 6: Health Check to ensure container is up
         stage('Health Check') {
             steps {
                 script {
-                    echo '🔍 Checking if app is running...'
+                    echo '🔍 Performing health check for app container...'
                     sh """
+                        sleep 10  # Wait for the container to be ready
                         docker ps | grep ${APP_CONTAINER} || (echo '❌ App container is not running!' && exit 1)
-                        echo '✅ App container is running.'
+                        echo '✅ App container is running successfully.'
                     """
                 }
             }
         }
     }
+
+    // ✅ Post actions for status
     post {
-        success { echo "🎉 Deployment successful on ${BRANCH_NAME}!" }
-        failure { echo "❌ Deployment failed on ${BRANCH_NAME}. Check Jenkins logs." }
-        always  { echo "📜 Pipeline completed for branch: ${BRANCH_NAME}." }
+        success {
+            echo "🎉 Deployment successful on branch: ${BRANCH_NAME}!"
+        }
+        failure {
+            echo "❌ Deployment failed on branch: ${BRANCH_NAME}. Check Jenkins logs for more details."
+        }
+        always {
+            echo "📜 Pipeline completed for branch: ${BRANCH_NAME}."
+        }
     }
 }
