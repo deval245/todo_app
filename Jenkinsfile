@@ -7,8 +7,7 @@ pipeline {
         IMAGE_NAME = "devalth/todo-app"
         APP_CONTAINER = "fastapi_todo"
         PGADMIN_CONTAINER = "todo_pgadmin"
-        DB_CONTAINER = "todo_postgres"
-        BRANCH_NAME = "${env.BRANCH_NAME}"  // Capture branch dynamically
+        BRANCH_NAME = "${env.BRANCH_NAME}"
     }
 
     stages {
@@ -26,7 +25,7 @@ pipeline {
                     echo '🐳 Building & pushing image to DockerHub...'
                     sh """
                         docker build -t ${IMAGE_NAME}:${BRANCH_NAME} .
-                        echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
+                        echo '${DOCKERHUB_CREDENTIALS_PSW}' | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
                         docker push ${IMAGE_NAME}:${BRANCH_NAME}
                         docker logout
                     """
@@ -34,15 +33,13 @@ pipeline {
             }
         }
 
-        stage('Safe Cleanup Old Containers') {
+        stage('Approval for QA & Main') {
+            when {
+                branch 'qa'
+                branch 'main'
+            }
             steps {
-                script {
-                    echo '⚙️ Cleaning up old containers (except DB)...'
-                    sh """
-                        docker stop ${APP_CONTAINER} || true && docker rm ${APP_CONTAINER} || true
-                        docker stop ${PGADMIN_CONTAINER} || true && docker rm ${PGADMIN_CONTAINER} || true
-                    """
-                }
+                input message: "Approve deployment to ${env.BRANCH_NAME}?"
             }
         }
 
@@ -51,7 +48,7 @@ pipeline {
                 script {
                     echo "🚀 Deploying using docker-compose.${BRANCH_NAME}.yaml"
                     sh """
-                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml pull  # Optional if pulling
+                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml pull || echo 'Skipping pull, using local images...'
                         docker-compose -f docker-compose.${BRANCH_NAME}.yaml up --build -d app pgadmin
                     """
                 }
@@ -61,11 +58,11 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    echo '🔍 Checking running containers...'
+                    echo '🔍 Performing health checks...'
                     sh """
-                        docker ps | grep ${APP_CONTAINER} || (echo '❌ App Failed!' && exit 1)
-                        docker ps | grep ${PGADMIN_CONTAINER} || (echo '❌ PGAdmin Failed!' && exit 1)
-                        echo '✅ All good in ${BRANCH_NAME} environment!'
+                        docker ps | grep ${APP_CONTAINER} || (echo '❌ App container down!' && exit 1)
+                        docker ps | grep ${PGADMIN_CONTAINER} || (echo '❌ PGAdmin container down!' && exit 1)
+                        echo '✅ Deployment healthy!'
                     """
                 }
             }
@@ -74,13 +71,13 @@ pipeline {
 
     post {
         success {
-            echo "🎉 Successful build & deployment on ${BRANCH_NAME}!"
+            echo "🎉 Deployment successful on ${BRANCH_NAME}!"
         }
         failure {
-            echo "❌ Build or Deployment failed on ${BRANCH_NAME}!"
+            echo "❌ Deployment failed on ${BRANCH_NAME}. Check logs!"
         }
         always {
-            echo "📜 Pipeline finished for ${BRANCH_NAME} (check status)."
+            echo "📜 Pipeline execution finished for ${BRANCH_NAME}."
         }
     }
 }
