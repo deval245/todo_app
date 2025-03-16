@@ -7,6 +7,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
                 git credentialsId: 'aa1e19cf-82e1-4a8a-9200-d15c06f4c0dd', url: 'https://github.com/deval245/todo_app.git'
@@ -31,24 +32,26 @@ pipeline {
             }
         }
 
-        stage('Deploy Application using Docker Compose') {
+        stage('Clean and Deploy Containers (Without Dropping DB)') {
             steps {
                 script {
-                    // ✅ First forcefully remove any conflicting containers dynamically
                     sh '''
-                        for container in todo_postgres todo_pgadmin fastapi_todo; do
-                            if [ $(docker ps -a -q -f name=$container) ]; then
-                                echo "⚙️ Removing old container: $container ..."
-                                docker rm -f $container
-                            fi
-                        done
+                        echo "⚙️ Stopping running app, Jenkins, and pgAdmin containers if they exist..."
+
+                        # Stop and remove application, Jenkins, and pgAdmin containers (if they exist), but NOT the database container
+                        docker rm -f fastapi_todo || true
+                        docker rm -f todo_jenkins || true
+                        docker rm -f todo_pgadmin || true
+
+                        echo "✅ Cleaned up old app, Jenkins, and pgAdmin containers."
+
+                        echo "🚀 Bringing up all containers with fresh build, preserving database volume..."
+
+                        # Do NOT use --volumes here to preserve PostgreSQL database data
+                        docker-compose down --remove-orphans || true
+
+                        docker-compose up --build -d
                     '''
-
-                    // ✅ Bring down existing setup if any (with volumes and orphans cleanup)
-                    sh 'docker-compose down --volumes --remove-orphans || true'
-
-                    // ✅ Rebuild and start everything freshly
-                    sh 'docker-compose up --build -d'
                 }
             }
         }
