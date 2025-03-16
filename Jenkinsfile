@@ -34,7 +34,8 @@ pipeline {
         stage('Deploy Application using Docker Compose') {
             steps {
                 script {
-                    sh 'docker-compose down'
+                    // ✅ Safe cleanup of old containers, volumes, and networks before deploying
+                    sh 'docker-compose down --volumes --remove-orphans || true'
                     sh 'docker-compose up --build -d'
                 }
             }
