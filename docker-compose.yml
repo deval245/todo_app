@@ -43,7 +43,7 @@ services:
   jenkins:
     build:
       context: .
-      dockerfile: Dockerfile.jenkins  # ✅ Custom Jenkins Dockerfile
+      dockerfile: Dockerfile.jenkins.Dockerfile  # ✅ Custom Jenkins Dockerfile
     container_name: todo_jenkins
     restart: always
     ports:
