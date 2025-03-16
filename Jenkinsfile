@@ -1,17 +1,13 @@
 pipeline {
     agent any
-
     environment {
         DOCKERHUB_CREDENTIALS = credentials('docker-cred')
         GITHUB_CREDENTIALS = credentials('github-cred')
         IMAGE_NAME = "devalth/todo-app"
-        APP_CONTAINER = "fastapi_todo"
-        PGADMIN_CONTAINER = "todo_pgadmin"
         BRANCH_NAME = "${env.BRANCH_NAME}"
+        APP_CONTAINER = "fastapi_todo_${env.BRANCH_NAME}"
     }
-
     stages {
-
         stage('Checkout Code') {
             steps {
                 echo "🧾 Checking out branch: ${env.BRANCH_NAME}"
@@ -22,7 +18,7 @@ pipeline {
         stage('Build & Push Docker Image') {
             steps {
                 script {
-                    echo '🐳 Building & pushing image to DockerHub...'
+                    echo '🐳 Building & pushing Docker image to DockerHub...'
                     sh """
                         docker build -t ${IMAGE_NAME}:${BRANCH_NAME} .
                         echo '${DOCKERHUB_CREDENTIALS_PSW}' | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
@@ -33,23 +29,20 @@ pipeline {
             }
         }
 
-        stage('Approval for QA & Main') {
-            when {
-                branch 'qa'
-                branch 'main'
-            }
+        stage('Ensure Network Exists') {
             steps {
-                input message: "Approve deployment to ${env.BRANCH_NAME}?"
+                echo "🌐 Ensuring network 'todo_network' exists..."
+                sh "docker network inspect todo_network >/dev/null 2>&1 || docker network create todo_network"
             }
         }
 
-        stage('Deploy Environment') {
+        stage('Deploy App Container') {
             steps {
                 script {
-                    echo "🚀 Deploying using docker-compose.${BRANCH_NAME}.yaml"
+                    echo "🚀 Deploying app container for branch: ${BRANCH_NAME}"
                     sh """
-                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml pull || echo 'Skipping pull, using local images...'
-                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml up --build -d app pgadmin
+                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml pull
+                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml up --build --force-recreate -d
                     """
                 }
             }
@@ -58,26 +51,18 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    echo '🔍 Performing health checks...'
+                    echo '🔍 Checking if app is running...'
                     sh """
-                        docker ps | grep ${APP_CONTAINER} || (echo '❌ App container down!' && exit 1)
-                        docker ps | grep ${PGADMIN_CONTAINER} || (echo '❌ PGAdmin container down!' && exit 1)
-                        echo '✅ Deployment healthy!'
+                        docker ps | grep ${APP_CONTAINER} || (echo '❌ App container is not running!' && exit 1)
+                        echo '✅ App container is running.'
                     """
                 }
             }
         }
     }
-
     post {
-        success {
-            echo "🎉 Deployment successful on ${BRANCH_NAME}!"
-        }
-        failure {
-            echo "❌ Deployment failed on ${BRANCH_NAME}. Check logs!"
-        }
-        always {
-            echo "📜 Pipeline execution finished for ${BRANCH_NAME}."
-        }
+        success { echo "🎉 Deployment successful on ${BRANCH_NAME}!" }
+        failure { echo "❌ Deployment failed on ${BRANCH_NAME}. Check Jenkins logs." }
+        always  { echo "📜 Pipeline completed for branch: ${BRANCH_NAME}." }
     }
 }
