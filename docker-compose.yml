@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   db:
     image: postgres:15
@@ -12,7 +10,7 @@ services:
     ports:
       - "5433:5432"  # Host:Container
     volumes:
-      - postgres_data:/var/lib/postgresql/data  # Persistent database storage
+      - postgres_data:/var/lib/postgresql/data  # Persistent storage
 
   app:
     build: .
@@ -25,8 +23,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app  # Bind source code for development
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]  # Auto-reload for dev
+      - .:/app  # Mount source for live reload
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   pgadmin:
     image: dpage/pgadmin4
@@ -35,28 +33,30 @@ services:
     depends_on:
       - db
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com  # Admin login for pgAdmin
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
-      - "5050:80"  # pgAdmin available on localhost:5050
+      - "5050:80"
     volumes:
-      - pgadmin_data:/var/lib/pgadmin  # Persistent pgAdmin settings
+      - pgadmin_data:/var/lib/pgadmin
 
   jenkins:
-    image: jenkins/jenkins:lts  #
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins  # ✅ Custom Jenkins Dockerfile
     container_name: todo_jenkins
     restart: always
     ports:
-      - "8181:8080"  # Jenkins Web UI on localhost:8181
-      - "50000:50000"  # Jenkins agent port
-    privileged: true  # ✅ Required to access Docker daemon
-    user: root  # Run as root to use Docker socket
+      - "8181:8080"  # Jenkins UI
+      - "50000:50000"  # Agent port
+    privileged: true  # ✅ Access Docker daemon
+    user: root  # Run as root for docker.sock access
     volumes:
-      - jenkins_home:/var/jenkins_home  # Persistent Jenkins data
-      - ./jenkins_plugins:/usr/share/jenkins/ref/plugins  # Pre-load Jenkins plugins (Optional)
-      - /var/run/docker.sock:/var/run/docker.sock  # ✅ Critical for Docker commands in Jenkins pipelines
+      - jenkins_home:/var/jenkins_home  # Jenkins data
+      - ./jenkins_plugins:/usr/share/jenkins/ref/plugins  # Optional plugins
+      - /var/run/docker.sock:/var/run/docker.sock  # ✅ Docker control inside Jenkins
     environment:
-      JAVA_OPTS: -Djenkins.install.runSetupWizard=false  # Skip initial setup wizard (Optional)
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false  # Skip setup wizard
 
 volumes:
   postgres_data:
