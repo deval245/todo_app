@@ -36,20 +36,18 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        echo "⚙️ Stopping running application and pgAdmin containers if they exist..."
+                        echo "⚙️ Stopping running app and pgAdmin containers if they exist..."
 
-                        # Stop and remove ONLY application and pgAdmin containers (avoid Jenkins and DB)
+                        # Stop app and pgAdmin ONLY — preserving Jenkins and Postgres containers
                         docker rm -f fastapi_todo || true
                         docker rm -f todo_pgadmin || true
 
                         echo "✅ Cleaned up old app and pgAdmin containers."
 
-                        echo "🚀 Bringing up all containers with fresh build, preserving Jenkins and database volumes..."
+                        echo "🚀 Bringing up app, Jenkins, and pgAdmin fresh, preserving DB..."
 
-                        # Do NOT use --volumes here to preserve PostgreSQL and Jenkins data
-                        docker-compose down --remove-orphans || true
-
-                        docker-compose up --build -d
+                        # ONLY bring up app, pgadmin, jenkins (db untouched)
+                        docker-compose up --build -d app pgadmin jenkins
                     '''
                 }
             }
