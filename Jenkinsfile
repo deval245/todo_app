@@ -1,18 +1,13 @@
 pipeline {
     agent any
-
     environment {
         DOCKERHUB_CREDENTIALS = credentials('docker-cred')
         GITHUB_CREDENTIALS = credentials('github-cred')
         IMAGE_NAME = "devalth/todo-app"
-        APP_CONTAINER = "fastapi_todo"
-        PGADMIN_CONTAINER = "todo_pgadmin"
         BRANCH_NAME = "${env.BRANCH_NAME}"
+        APP_CONTAINER = "fastapi_todo_${env.BRANCH_NAME}"
     }
-
     stages {
-
-        // 1. Checkout Stage
         stage('Checkout Code') {
             steps {
                 echo "🧾 Checking out branch: ${env.BRANCH_NAME}"
@@ -20,15 +15,7 @@ pipeline {
             }
         }
 
-        // 2. Build & Push Docker Image (only for deployable branches)
         stage('Build & Push Docker Image') {
-            when {
-                anyOf {
-                    branch 'develop'
-                    branch 'qa'
-                    branch 'main'
-                }
-            }
             steps {
                 script {
                     echo '🐳 Building & pushing Docker image to DockerHub...'
@@ -42,72 +29,40 @@ pipeline {
             }
         }
 
-        // 3. Approval (for QA & Main)
-        stage('Approval for QA & Main') {
-            when {
-                anyOf {
-                    branch 'qa'
-                    branch 'main'
-                }
-            }
+        stage('Ensure Network Exists') {
             steps {
-                input message: "Approve deployment to ${env.BRANCH_NAME}?"
+                echo "🌐 Ensuring network 'todo_network' exists..."
+                sh "docker network inspect todo_network >/dev/null 2>&1 || docker network create todo_network"
             }
         }
 
-        // 4. Deploy Environment
-        stage('Deploy Environment') {
+        stage('Deploy App Container') {
             steps {
                 script {
-                    // Default compose file for branches like 'feature-*' or 'others'
-                    def composeFile = 'docker-compose.yaml'
-
-                    // Dynamically pick correct YAML based on branch name
-                    if (BRANCH_NAME == 'develop') {
-                        composeFile = 'docker-compose.develop.yaml'
-                    } else if (BRANCH_NAME == 'qa') {
-                        composeFile = 'docker-compose.qa.yaml'
-                    } else if (BRANCH_NAME == 'main') {
-                        composeFile = 'docker-compose.main.yaml'
-                    }
-
-                    echo "🚀 Deploying using: ${composeFile}"
-
-                    // Stop previous containers if any, and deploy new
+                    echo "🚀 Deploying app container for branch: ${BRANCH_NAME}"
                     sh """
-                        docker-compose -f ${composeFile} down || echo 'Nothing to stop, fresh start.'
-                        docker-compose -f ${composeFile} pull || echo 'Using local image, no pull needed.'
-                        docker-compose -f ${composeFile} up --build -d
+                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml pull
+                        docker-compose -f docker-compose.${BRANCH_NAME}.yaml up --build --force-recreate -d
                     """
                 }
             }
         }
 
-        // 5. Health Check
         stage('Health Check') {
             steps {
                 script {
-                    echo '🔍 Running health checks...'
+                    echo '🔍 Checking if app is running...'
                     sh """
-                        docker ps | grep ${APP_CONTAINER} || (echo '❌ App container not running!' && exit 1)
-                        docker ps | grep ${PGADMIN_CONTAINER} || (echo '❌ PGAdmin container not running!' && exit 1)
-                        echo '✅ All containers are running properly!'
+                        docker ps | grep ${APP_CONTAINER} || (echo '❌ App container is not running!' && exit 1)
+                        echo '✅ App container is running.'
                     """
                 }
             }
         }
     }
-
-    // 6. Post Build Handling
     post {
-        success {
-            echo "🎉 Deployment successful on branch: ${BRANCH_NAME}!"
-        }
-        failure {
-            echo "❌ Deployment failed on branch: ${BRANCH_NAME}. Please check Jenkins logs."
-        }
-        always {
-            echo "📜 Pipeline completed for branch: ${BRANCH_NAME}."
-        }
+        success { echo "🎉 Deployment successful on ${BRANCH_NAME}!" }
+        failure { echo "❌ Deployment failed on ${BRANCH_NAME}. Check Jenkins logs." }
+        always  { echo "📜 Pipeline completed for branch: ${BRANCH_NAME}." }
     }
 }

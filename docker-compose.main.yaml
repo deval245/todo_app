@@ -2,8 +2,8 @@ version: "3.8"
 
 services:
   app:
-    image: devalth/todo-app:main  # ✅ Main/Prod image
-    container_name: fastapi_todo
+    image: devalth/todo-app:main
+    container_name: fastapi_todo_main
     restart: always
     environment:
       DATABASE_URL: postgresql://myuser:mypassword@db:5432/todo_db
@@ -14,4 +14,4 @@ services:
 
 networks:
   todo_network:
-    external: true  # ✅ Connect to existing persistent db/pgadmin
+    external: true
