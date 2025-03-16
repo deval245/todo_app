@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-cred')  // DockerHub credential ID
+        DOCKERHUB_CREDENTIALS = credentials('dock-cred')  // DockerHub credential ID
         GITHUB_CREDENTIALS = credentials('github-cred')        // GitHub credential ID
         IMAGE_NAME = "devalth/todo-app"
         APP_CONTAINER = "fastapi_todo"
