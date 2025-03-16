@@ -7,7 +7,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
                 git credentialsId: 'github-cred', url: 'https://github.com/deval245/todo_app.git'
@@ -32,22 +31,17 @@ pipeline {
             }
         }
 
-        stage('Clean and Deploy Containers (Without Dropping DB or Jenkins)') {
+        stage('Clean and Deploy Containers (Without Dropping DB)') {
             steps {
                 script {
                     sh '''
                         echo "⚙️ Stopping running app and pgAdmin containers if they exist..."
-
-                        # Stop app and pgAdmin ONLY — preserving Jenkins and Postgres containers
                         docker rm -f fastapi_todo || true
                         docker rm -f todo_pgadmin || true
-
                         echo "✅ Cleaned up old app and pgAdmin containers."
 
-                        echo "🚀 Bringing up app, Jenkins, and pgAdmin fresh, preserving DB..."
-
-                        # ONLY bring up app, pgadmin, jenkins (db untouched)
-                        docker-compose up --build -d app pgadmin jenkins
+                        echo "🚀 Bringing up app and pgAdmin fresh, preserving DB..."
+                        docker-compose up --build -d app pgadmin
                     '''
                 }
             }
