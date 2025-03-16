@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'deval245/todo-app'
+        IMAGE_NAME = 'devalth/todo-app'
         IMAGE_TAG = 'latest'
     }
 
