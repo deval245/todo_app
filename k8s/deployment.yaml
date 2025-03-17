@@ -21,5 +21,5 @@ spec:
         ports:
         - containerPort: 8000
         env:
-        - name: DATABASE_URL
-          value: "postgresql://myuser:mypassword@db:5432/TodoAppDatabase"
+          - name: DATABASE_URL
+            value: "postgresql://myuser:mypassword@db.NAMESPACE_PLACEHOLDER.svc.cluster.local:5432/TodoAppDatabase"
