@@ -2,10 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: todo-app-deployment
+  namespace: NAMESPACE_PLACEHOLDER  # ✅ Namespace will be injected dynamically from Jenkins
   labels:
     app: todo-app
 spec:
-  replicas: 2
+  replicas: 2  # You can make this configurable via another ENV if needed
   selector:
     matchLabels:
       app: todo-app
@@ -16,9 +17,9 @@ spec:
     spec:
       containers:
       - name: todo-app
-        image: devalth/todo-app:main  # Replace if needed with branch/tag
+        image: IMAGE_PLACEHOLDER  # ✅ Jenkins will dynamically replace this with branch-specific image
         ports:
         - containerPort: 8000
         env:
         - name: DATABASE_URL
-          value: "postgresql://myuser:mypassword@db:5432/TodoAppDatabase"  # Or your DB URL
+          value: "postgresql://myuser:mypassword@todo_postgres:5432/TodoAppDatabase"  # ✅ Use service name inside same K8s cluster

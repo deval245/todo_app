@@ -56,7 +56,7 @@ services:
       - ./jenkins_plugins:/usr/share/jenkins/ref/plugins  # Optional plugins
       - /var/run/docker.sock:/var/run/docker.sock  # ✅ Docker control inside Jenkins
       - ~/.kube:/root/.kube
-      - ~/.minikube:/root/.minikube
+
     environment:
       JAVA_OPTS: -Djenkins.install.runSetupWizard=false  # Skip setup wizard
 

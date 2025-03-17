@@ -1,11 +1,13 @@
 pipeline {
     agent any
+
     environment {
         DOCKERHUB_CREDENTIALS = credentials('docker-cred')
         GITHUB_CREDENTIALS = credentials('github-cred')
         IMAGE_NAME = "devalth/todo-app"
         BRANCH_NAME = "${env.BRANCH_NAME}"
-        K8S_NAMESPACE = "todo-app-${env.BRANCH_NAME}"  // Separate namespace per branch (qa, main, develop)
+        K8S_NAMESPACE = "todo-app-${env.BRANCH_NAME}"  // Per branch namespace (qa, dev, main)
+        KUBECONFIG = "/root/.kube/config" // ✅ Point to Kubernetes Docker Desktop config
     }
 
     stages {
@@ -22,22 +24,24 @@ pipeline {
         stage('Build & Push Docker Image') {
             steps {
                 script {
-                    echo '🐳 Building & pushing Docker image to DockerHub...'
-                    sh """
-                        docker build -t ${IMAGE_NAME}:${BRANCH_NAME} .
-                        echo '${DOCKERHUB_CREDENTIALS_PSW}' | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
-                        docker push ${IMAGE_NAME}:${BRANCH_NAME}
-                        docker logout
-                    """
+                    echo '🐳 Building and pushing Docker image to DockerHub...'
+                    withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            docker build -t ${IMAGE_NAME}:${BRANCH_NAME} .
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            docker push ${IMAGE_NAME}:${BRANCH_NAME}
+                            docker logout
+                        """
+                    }
                 }
             }
         }
 
-        // ✅ Stage 3: Create Namespace if Not Exists
+        // ✅ Stage 3: Create Kubernetes Namespace (If not exists)
         stage('Create Namespace') {
             steps {
                 script {
-                    echo "📦 Ensuring Kubernetes namespace '${K8S_NAMESPACE}' exists..."
+                    echo "📦 Creating or ensuring Kubernetes namespace '${K8S_NAMESPACE}'..."
                     sh """
                         kubectl get namespace ${K8S_NAMESPACE} || kubectl create namespace ${K8S_NAMESPACE}
                     """
@@ -45,56 +49,68 @@ pipeline {
             }
         }
 
-        // ✅ Stage 4: Deploy to Kubernetes (Apply Manifests)
+        // ✅ Stage 4: Deploy to Kubernetes (Dynamic Deployment)
         stage('Deploy to Kubernetes') {
             steps {
                 script {
                     echo "🚀 Deploying app to Kubernetes in namespace '${K8S_NAMESPACE}'..."
 
-                    // Inject branch name & image dynamically into k8s files before apply
+                    // Use envsubst for multiple env replacements instead of sed
                     sh """
-                        # Replace placeholder IMAGE TAG in deployment.yaml dynamically
-                        sed 's|IMAGE_PLACEHOLDER|${IMAGE_NAME}:${BRANCH_NAME}|g' k8s/deployment.yaml > k8s/deployment_temp.yaml
+                        export IMAGE=${IMAGE_NAME}:${BRANCH_NAME}
+                        export NAMESPACE=${K8S_NAMESPACE}
 
-                        # Apply Namespace (idempotent)
-                        kubectl apply -f k8s/namespace.yaml
+                        # Replace placeholders dynamically
+                        envsubst < k8s/deployment.yaml > k8s/deployment_temp.yaml
 
                         # Apply Deployment and Service
-                        kubectl apply -f k8s/deployment_temp.yaml -n ${K8S_NAMESPACE}
-                        kubectl apply -f k8s/service.yaml -n ${K8S_NAMESPACE}
+                        kubectl apply -f k8s/deployment_temp.yaml -n \$NAMESPACE
+                        kubectl apply -f k8s/service.yaml -n \$NAMESPACE
+
+                        # Optional: Rollout status for fail-safe deployments
+                        kubectl rollout status deployment/todo-app -n \$NAMESPACE --timeout=60s
                     """
                 }
             }
         }
 
-        // ✅ Stage 5: Health Check for K8s Pod
+        // ✅ Stage 5: Health Check on Kubernetes
         stage('Health Check') {
             steps {
                 script {
-                    echo '🔍 Performing health check for Kubernetes deployment...'
+                    echo "🔍 Performing Kubernetes deployment health check..."
                     sh """
-                        sleep 10  # Wait for pods to spin up
+                        sleep 10  # Allow pods to come up
+
+                        echo "📊 Pods status:"
                         kubectl get pods -n ${K8S_NAMESPACE}
+
+                        # Dynamic pod name fetching and logs
                         POD_NAME=\$(kubectl get pods -n ${K8S_NAMESPACE} -l app=todo-app -o jsonpath="{.items[0].metadata.name}")
+                        echo "📜 Logs from Pod \$POD_NAME:"
                         kubectl logs \$POD_NAME -n ${K8S_NAMESPACE}
+
+                        # Check if pod is ready
+                        kubectl wait --for=condition=ready pod/\$POD_NAME --timeout=60s -n ${K8S_NAMESPACE}
+
+                        # Get Service status
+                        echo "🌐 Service status:"
                         kubectl get svc -n ${K8S_NAMESPACE}
 
-                        # Check if Pod is Running
-                        kubectl wait --for=condition=ready pod/\$POD_NAME --timeout=60s -n ${K8S_NAMESPACE}
-                        echo '✅ App deployed and running successfully on Kubernetes.'
+                        echo '✅ App successfully deployed and running on Kubernetes.'
                     """
                 }
             }
         }
     }
 
-    // ✅ Post actions for status
+    // ✅ Post actions for notifications
     post {
         success {
-            echo "🎉 Kubernetes deployment successful on branch: ${BRANCH_NAME}!"
+            echo "🎉 Deployment successful for branch: ${BRANCH_NAME}!"
         }
         failure {
-            echo "❌ Kubernetes deployment failed on branch: ${BRANCH_NAME}. Check Jenkins logs for more details."
+            echo "❌ Deployment failed for branch: ${BRANCH_NAME}. Check Jenkins logs for details."
         }
         always {
             echo "📜 Pipeline completed for branch: ${BRANCH_NAME}."

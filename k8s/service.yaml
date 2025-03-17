@@ -2,12 +2,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: todo-app-service
+  namespace: NAMESPACE_PLACEHOLDER  # ✅ Dynamic namespace for isolation (per branch)
 spec:
-  type: NodePort  # Change LoadBalancer to NodePort
+  type: NodePort  # Exposes app on static port across all nodes
   selector:
-    app: todo-app
+    app: todo-app  # Matches pod selector in deployment
   ports:
   - protocol: TCP
-    port: 80          # Externally accessible port
-    targetPort: 8000  # Port your app is listening inside pod
-    nodePort: 30007   # Optional: Custom static port, or remove to auto-assign
+    port: 80          # Externally accessible port (within K8s cluster or outside based on setup)
+    targetPort: 8000  # Internal pod port
+    nodePort: 30007   # ✅ Optional static NodePort (change if conflict), or remove for dynamic
