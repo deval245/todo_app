@@ -21,7 +21,7 @@ services:
     environment:
       DATABASE_URL: postgresql://myuser:mypassword@db:5432/todo_db
     ports:
-      - "8000:8000"
+      - "0:8000"  # 🔑 0 means assign any available port on host, map to cont
     volumes:
       - .:/app  # Mount source for live reload
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -55,6 +55,8 @@ services:
       - jenkins_home:/var/jenkins_home  # Jenkins data
       - ./jenkins_plugins:/usr/share/jenkins/ref/plugins  # Optional plugins
       - /var/run/docker.sock:/var/run/docker.sock  # ✅ Docker control inside Jenkins
+      - ~/.kube:/root/.kube
+      - ~/.minikube:/root/.minikube
     environment:
       JAVA_OPTS: -Djenkins.install.runSetupWizard=false  # Skip setup wizard
 
