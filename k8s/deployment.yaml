@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: todo-app-deployment
-  namespace: NAMESPACE_PLACEHOLDER  # ✅ Important for branch-wise isolation
+  namespace: NAMESPACE_PLACEHOLDER  # ✅ Dynamic via Jenkins
   labels:
     app: todo-app
 spec:
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: todo-app
-        image: IMAGE_PLACEHOLDER  # ✅ Dynamic via Jenkins
+        image: IMAGE_PLACEHOLDER  # ✅ Dynamic image via Jenkins
         ports:
         - containerPort: 8000
         env:
